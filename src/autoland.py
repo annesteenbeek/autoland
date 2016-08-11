@@ -27,6 +27,7 @@ def external_cb(point):
     external_position = point
 
 local_pos_pub = setpoint.get_pub_position_local(queue_size=10, latch=True)
+velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(que_size = 1, latch=True)
 local_pos_sub = rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
 state_sub = rospy.Subscriber(mavros.get_topic('state'), State, state_cb)
 
@@ -154,10 +155,22 @@ def autoland():
     stabalize_above_land()
     rospy.loginfo("AUTOLAND loitering done, starting descent")
     # TODO currently using local pos, should use external estimator
+    landed = False
     while not landed:
+        error_x = cur_local_pose.pose.position.x - LAND_X
+        error_y = cur_local_pose.pose.position.Y - LAND_Y
+        speed_x = error_x * Pgain
+        speed_y = error_y * Pgain
+        speed_z = - DESCEND_SPEED
         
+        vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
+        vel.twist.linear = setpoint.Vector3(x=speed_x, y=speed_y, z=speed_z)
+        vel.twist.angular = setpoint.Vector3(z=0)
+        velocity_cmd_pub(vel)
+        rate.sleep()
+        if cur_local_pose.pose.position.z <= 0.4:
+            landed = True
 
-    
 # disarm and shutdown copter
 def finish_land():
     global landed
