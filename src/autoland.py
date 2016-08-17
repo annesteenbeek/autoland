@@ -8,6 +8,22 @@ from mavros import command, mission, setpoint
 from geometry_msgs.msg import PoseStamped, Point, Pose
 from mavros.msg import State, Waypoint 
 from mavros.srv import CommandBool, SetMode, WaypointPush
+from std_msgs.msg import Float64
+
+# set variables
+target = PoseStamped() # setpoint target to meet
+DESCEND_SPEED = 0.5 # descend speed [m/s]
+ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
+LAND_ALT = 12 # altitude for landing [m]
+LAND_X = 0
+LAND_Y = 0
+LOITER_TIME = 5. # time to loiter bevore descending [sec]
+landState = 'MOVE_AWAY' # counter for landing progress
+prevState = landState
+LAND_KP = 0.9
+landed = False
+effort_x = 0
+effort_y = 0
 
 cur_local_pose = PoseStamped()
 cur_state = State()
@@ -26,25 +42,19 @@ def external_cb(point):
     print(point)
     external_position = point
 
+def pid_cb(effort, direction):
+    global effort_x, effort_y
+    if direction is "x":
+        effort_x = effort.data
+    elif direction is "y":
+        effort_y = effort.data
+    else:
+        rospy.logerr("Incorrect pid cb direction")
+
 local_pos_pub = setpoint.get_pub_position_local(queue_size=10, latch=True)
 velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10, latch=True)
 local_pos_sub = rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
 state_sub = rospy.Subscriber(mavros.get_topic('state'), State, state_cb)
-
-# get external position information from gazebo/sensors
-# external_pos_sub = rospy.Subscriber('/gazebo/model_states/pose', Pose, external_cb)
-
-target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.5 # descend speed [m/s]
-ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
-LAND_ALT = 12 # altitude for landing [m]
-LAND_X = 0
-LAND_Y = 0
-LOITER_TIME = 5. # time to loiter bevore descending [sec]
-landState = 'MOVE_AWAY' # counter for landing progress
-prevState = landState
-LAND_KP = 0.9
-landed = False
 
 def arm(state):
     try:
@@ -158,22 +168,32 @@ def autoland():
     rospy.loginfo("AUTOLAND loitering done, starting descent")
     # TODO currently using local pos, should use external estimator
     landed = False
-    # advertise quadcopter x and y state
-    # create controller in launchfile
-    # set setpoint advertiser in launchfile
     # set parameters in launchfile/ this file
-    # subscribe to control_effort topic use callback 
     # add abortion  radius
-    velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10, latch=True)
-    local_pos_sub = rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
-   
+    velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
+    rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
+    rospy.Subscriber('effort_y', Float64, pid_cb, "y", 1) 
+    
+    # create setpoint publishers
+    set_x_pub = rospy.Publisher("autoland_setpoint_x", Float64, latch=True, queue_size=1)
+    set_y_pub = rospy.Publisher("autoland_setpoint_y", Float64, latch=True, queue_size=1)
+    
+
+    # create plant state publishers
+    pose_x_pub = rospy.Publisher("autoland_pose_x", Float64, queue_size=3)
+    pose_y_pub = rospy.Publisher("autoland_pose_y", Float64, queue_size=3)
+
     while not landed:
-        cur_local_pose.pose.position.x
-        cur_local_pose.pose.position.y 
-        LAND_X
-        LAND_Y  
-        speed_x = error_x * LAND_KP
-        speed_y = error_y * LAND_KP
+        # publish x and y position
+        pose_x_pub.publish(cur_local_pose.pose.position.x)
+        pose_y_pub.publish(cur_local_pose.pose.position.y)
+
+        # send landing setpoints
+        set_x_pub.publish(LAND_X)
+        set_y_pub.publish(LAND_Y)
+
+        speed_x = effort_x
+        speed_y = effort_y
         speed_z = - DESCEND_SPEED
         
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
@@ -184,8 +204,8 @@ def autoland():
 
         if cur_local_pose.pose.position.z <= 0.4:
             print("I landed!")
-            print("x error: %.2fm" % error_x)
-            print("y error: %.2fm" % error_y)
+            print("x pos: %.3fm" % cur_local_pose.pose.position.x)
+            print("y pos: %.fm" % cur_local_pose.pose.position.y)
             landed = True
             arm(False)
 

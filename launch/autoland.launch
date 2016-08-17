@@ -1,9 +1,26 @@
 <launch>
-    <node name="autoland_main" pkg="autoland_node" type="autoland.py" output="screen" >
-        
-    </node>
+    <!-- vim: set ft=xml noet : -->
+    <!--	<arg name="fcu_url" default="/dev/ttyUSB0:57600" /> -->
+	<!--    <arg name="fcu_url" default="udp://localhost:14550@localhost:11311" />
+    <arg name="gcs_url" default="" />
+    <arg name="tgt_system" default="1" />
+    <arg name="tgt_component" default="1" />
+    <arg name="log_output" default="screen" />
 
-    <node name="auotland_controller" pkg="pid" type="controller" output="screen">
+    <include file="$(find mavros)/launch/node.launch">
+        <arg name="pluginlists_yaml" value="$(find mavros)/launch/px4_pluginlists.yaml" />
+        <arg name="config_yaml" value="$(find mavros)/launch/px4_config.yaml" />
+
+        <arg name="fcu_url" value="$(arg fcu_url)" />
+        <arg name="gcs_url" value="$(arg gcs_url)" />
+        <arg name="tgt_system" value="$(arg tgt_system)" />
+        <arg name="tgt_component" value="$(arg tgt_component)" />
+        <arg name="log_output" value="$(arg log_output)" />
+	</include> -->
+   
+	<node name="autoland_main" pkg="autoland_node" type="autoland.py" output="screen" />
+
+    <node name="controller_x" pkg="pid" type="controller" output="screen">
         <param name="Kp" value="1.0" />
         <param name="Ki" value="0.0" />
         <param name="Kd" value="0.0" />
@@ -14,11 +31,11 @@
 		<param name="max_loop_frequency" value="100.0" />
 		<param name="min_loop_frequency" value="100.0" />
         <param name="topic_from_controller" value="effort_x" />
-        <param name="topic_from_plant" value="statex" />
-        <param name="setpoint_topic" value"setpointx" />
+        <param name="topic_from_plant" value="autoland_pose_x" />
+        <param name="setpoint_topic" value="autoland_setpoint_x" />
     </node>
 
-    <node name="auotland_controller" pkg="pid" type="controller" output="screen">
+    <node name="controller_y" pkg="pid" type="controller" output="screen">
         <param name="Kp" value="1.0" />
         <param name="Ki" value="0.0" />
         <param name="Kd" value="0.0" />
@@ -28,10 +45,17 @@
 		<param name="diagnostic_period" value="0.25" />
 		<param name="max_loop_frequency" value="100.0" />
 		<param name="min_loop_frequency" value="100.0" />
-        <param name="topic_from_controller" value="effort_x" />
-        <param name="topic_from_plant" value="statex" />
-        <param name="setpoint_topic" value"setpointx" />
+        <param name="topic_from_controller" value="effort_y" />
+        <param name="topic_from_plant" value="autoland_pose_y" />
+        <param name="setpoint_topic" value="autoland_setpoint_y" />
     </node>
+
+	<node name="rqt_plot" pkg="rqt_plot" type="rqt_plot" 
+			args="/effort_x/data /autoland_pose_x/data /autoland_setpoint_x/data" />
+
+	<node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
+
+			
 
 </launch>
 
