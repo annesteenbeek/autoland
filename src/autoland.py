@@ -43,6 +43,7 @@ LAND_Y = 0
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
 landState = 'MOVE_AWAY' # counter for landing progress
 prevState = landState
+LAND_KP = 0.9
 landed = False
 
 def arm(state):
@@ -157,12 +158,22 @@ def autoland():
     rospy.loginfo("AUTOLAND loitering done, starting descent")
     # TODO currently using local pos, should use external estimator
     landed = False
-    Pgain = 0.9
+    # advertise quadcopter x and y state
+    # create controller in launchfile
+    # set setpoint advertiser in launchfile
+    # set parameters in launchfile/ this file
+    # subscribe to control_effort topic use callback 
+    # add abortion  radius
+    velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10, latch=True)
+    local_pos_sub = rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
+   
     while not landed:
-        error_x = LAND_X - cur_local_pose.pose.position.x
-        error_y = LAND_Y - cur_local_pose.pose.position.y 
-        speed_x = error_x * Pgain
-        speed_y = error_y * Pgain
+        cur_local_pose.pose.position.x
+        cur_local_pose.pose.position.y 
+        LAND_X
+        LAND_Y  
+        speed_x = error_x * LAND_KP
+        speed_y = error_y * LAND_KP
         speed_z = - DESCEND_SPEED
         
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
