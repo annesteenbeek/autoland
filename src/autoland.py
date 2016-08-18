@@ -12,15 +12,14 @@ from std_msgs.msg import Float64
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.5 # descend speed [m/s]
+DESCEND_SPEED = 0.1 # descend speed [m/s]
 ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
-LAND_ALT = 12 # altitude for landing [m]
+LAND_ALT = 50 # altitude for landing [m]
 LAND_X = 0
 LAND_Y = 0
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
 landState = 'MOVE_AWAY' # counter for landing progress
 prevState = landState
-LAND_KP = 0.9
 landed = False
 effort_x = 0
 effort_y = 0
@@ -205,7 +204,7 @@ def autoland():
         if cur_local_pose.pose.position.z <= 0.4:
             print("I landed!")
             print("x pos: %.3fm" % cur_local_pose.pose.position.x)
-            print("y pos: %.fm" % cur_local_pose.pose.position.y)
+            print("y pos: %.3fm" % cur_local_pose.pose.position.y)
             landed = True
             arm(False)
 
