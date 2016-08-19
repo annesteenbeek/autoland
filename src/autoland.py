@@ -3,6 +3,7 @@
 import numpy
 import rospy
 import mavros
+import math
 from mavros.utils import *
 from mavros import command, mission, setpoint
 from geometry_msgs.msg import PoseStamped, Point, Pose
@@ -12,9 +13,10 @@ from std_msgs.msg import Float64
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.1 # descend speed [m/s]
+DESCEND_SPEED = 0.4 # descend speed [m/s]
 ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
-LAND_ALT = 50 # altitude for landing [m]
+allowed_deviation = 0.1 # radius to exceed to stop descend [m]
+LAND_ALT = 5 # altitude for landing [m]
 LAND_X = 0
 LAND_Y = 0
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
@@ -81,14 +83,13 @@ def set_offboard(state):
 
 # calculate distance between two points returns [cm]
 def get_distance(target):
-    # NOTE this could probably be done with TF
+    # NOTE this could probably be done more elegent with TF
     dx = target.pose.position.x - cur_local_pose.pose.position.x
     dy = target.pose.position.y - cur_local_pose.pose.position.y
     dz = target.pose.position.z - cur_local_pose.pose.position.z
 
     dv = numpy.array((dx, dy, dz))
     dist = numpy.linalg.norm(dv) * 100 # return in cm
-    # print("distance to target: %.1fcm" % dist)
     return dist 
 
 # set mode and set offboard
@@ -161,13 +162,12 @@ def stabalize_above_land():
 # engage in controlled descent
 def autoland():
     rospy.loginfo("REACHED AUTOLAND")
-    rate = rospy.Rate(20.0) # MUST be more then 2Hz
+    rate = rospy.Rate(100.0) # MUST be more then 2Hz
     global target
     stabalize_above_land()
     rospy.loginfo("AUTOLAND loitering done, starting descent")
     # TODO currently using local pos, should use external estimator
     landed = False
-    # set parameters in launchfile/ this file
     # add abortion  radius
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
     rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
@@ -183,9 +183,13 @@ def autoland():
     pose_y_pub = rospy.Publisher("autoland_pose_y", Float64, queue_size=3)
 
     while not landed:
+        pos_x = cur_local_pose.pose.position.x
+        pos_y = cur_local_pose.pose.position.y
+        pos_z = cur_local_pose.pose.position.z
+
         # publish x and y position
-        pose_x_pub.publish(cur_local_pose.pose.position.x)
-        pose_y_pub.publish(cur_local_pose.pose.position.y)
+        pose_x_pub.publish(pos_x)
+        pose_y_pub.publish(pos_y)
 
         # send landing setpoints
         set_x_pub.publish(LAND_X)
@@ -193,7 +197,14 @@ def autoland():
 
         speed_x = effort_x
         speed_y = effort_y
-        speed_z = - DESCEND_SPEED
+
+        dist_to_land = math.sqrt(
+                 math.pow(LAND_X - pos_x, 2) + math.pow(LAND_Y - pos_y,2)
+                )
+        if dist_to_land > allowed_deviation:
+            speed_z = 0
+        else:
+            speed_z = - DESCEND_SPEED
         
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
         vel.twist.linear = setpoint.Vector3(x=speed_x, y=speed_y, z=speed_z)
@@ -201,10 +212,11 @@ def autoland():
         velocity_cmd_pub.publish(vel)
         rate.sleep()
 
-        if cur_local_pose.pose.position.z <= 0.4:
+        if pos_z <= 0.4:
             print("I landed!")
-            print("x pos: %.3fm" % cur_local_pose.pose.position.x)
-            print("y pos: %.3fm" % cur_local_pose.pose.position.y)
+            print("x pos: %.3fm" % pos_x)
+            print("y pos: %.3fm" % pos_y)
+            print("Total distance: %.3fm" % dist_to_land)
             landed = True
             arm(False)
 
