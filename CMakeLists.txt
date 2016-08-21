@@ -7,7 +7,10 @@ project(autoland_node)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   mavros
+  mavros_extras
   roscpp
+  pid
+  rospy
 )
 
 ## System dependencies are found with CMake's conventions
@@ -129,11 +132,6 @@ include_directories(
 
 ## Declare a C++ executable
 #add_executable(offb_node src/offb_node.cpp)
-add_executable(offb_node src/offb_node.cpp)
-target_link_libraries(offb_node ${catkin_LIBRARIES})
-
-add_executable(simple src/simple_behaviour.cpp)
-target_link_libraries(simple ${catkin_LIBRARIES})
 
 
 ## Add cmake target dependencies of the executable
