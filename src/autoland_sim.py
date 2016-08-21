@@ -4,7 +4,6 @@ import numpy
 import rospy
 import mavros
 import math
-import sys
 from mavros.utils import *
 from mavros import command, mission, setpoint
 from geometry_msgs.msg import PoseStamped, Point, Pose
@@ -12,7 +11,6 @@ from geometry_msgs.msg import PoseStamped, Point, Pose
 from mavros.msg import State, Waypoint 
 from mavros.srv import CommandBool, SetMode, WaypointPush
 from std_msgs.msg import Float64
-from geometry_msgs.msg import Odometry 
 
 # set variables
 target = PoseStamped() # setpoint target to meet
@@ -20,12 +18,11 @@ DESCEND_SPEED = 0.4 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
-LAND_ALT = 12 # altitude for landing [m]
-LAND_X = 0 # relative to piksi 0
+LAND_ALT = 5 # altitude for landing [m]
+LAND_X = 0
 LAND_Y = 0
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
-DISARM_ALT = 0.2 # altitude to turn off engines [m]
-landState = 'SET_ALT' # counter for landing progress
+landState = 'MOVE_AWAY' # counter for landing progress
 prevState = landState
 landed = False
 effort_x = 0
@@ -35,7 +32,6 @@ cur_local_pose = PoseStamped()
 current_mode = ""
 prev_mode = ""
 external_postion = Point()
-rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
 
 def pose_cb(pose):
     global cur_local_pose
@@ -62,12 +58,6 @@ def pid_cb(effort, direction):
     else:
         rospy.logerr("Incorrect pid cb direction")
 
-def piksi_cb(data):
-    global piksi_local_x, piksi_local_y, piksi_cov
-    piksi_local_x = data.pose.pose.position.x
-    piksi_local_y = data.pose.pose.position.y
-    piksi_cov = data.pose.covariance[0]
-
 def set_topics():
     global local_pos_pub, velocity_cmd_pub, local_pos_sub, state_sub
     # mavros.set_namespace()
@@ -88,7 +78,7 @@ def set_offboard(state):
     except rospy.ServiceException as ex:
         fault(ex)
 
-# calculate distance between two points in 3d, returns [cm]
+# calculate distance between two points returns [cm]
 def get_distance(target):
     # NOTE this could probably be done more elegent with TF
     dx = target.pose.position.x - cur_local_pose.pose.position.x
@@ -99,13 +89,42 @@ def get_distance(target):
     dist = numpy.linalg.norm(dv) * 100 # return in cm
     return dist 
 
+# set mode and set offboard
+def setup_copter():
+    pose = PoseStamped()
+    pose.pose.position.x = 5
+    pose.pose.position.y = 5
+    pose.pose.position.z = 8
+
+    rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
+    for i in range(100):
+        local_pos_pub.publish(pose)
+        rate.sleep()
+    # set mode to OFFBOARD 
+    set_offboard(True)    
+    # Arm the copter
+    arm(True)
+
+# move away (Should only be used for tests to move copter into random position)    
+def move_away():
+    global target
+    pose = PoseStamped()
+    pose.pose.position.x = 5
+    pose.pose.position.y = 5
+    pose.pose.position.z = 8
+    
+    print("moving away")
+    target = pose
+    pose.header.stamp = rospy.get_rostime()
+    local_pos_pub.publish(pose)
+
 # set correct altitude for landing
 def set_land_alt():
     global target
     pose = PoseStamped()
     # get prev target xy (should grab current pose x/y)
-    pose.pose.position.x = cur_local_pose.pose.position.x
-    pose.pose.position.y = cur_local_pose.pose.position.y
+    pose.pose.position.x = target.pose.position.x 
+    pose.pose.position.y = target.pose.position.y 
     pose.pose.position.z = LAND_ALT # land altitude relative to launch altitude
     target = pose
     pose.header.stamp = rospy.get_rostime()
@@ -137,11 +156,14 @@ def stabalize_above_land():
 
 # engage in controlled descent
 def autoland():
-    global landed
     rospy.loginfo("REACHED AUTOLAND")
+    rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
+    global target
     stabalize_above_land()
     rospy.loginfo("AUTOLAND loitering done, starting descent")
     # TODO currently using local pos, should use external estimator
+    landed = False
+    # add abortion  radius
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
     rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
     rospy.Subscriber('effort_y', Float64, pid_cb, "y", 1) 
@@ -150,20 +172,15 @@ def autoland():
     set_x_pub = rospy.Publisher("autoland_setpoint_x", Float64, latch=True, queue_size=1)
     set_y_pub = rospy.Publisher("autoland_setpoint_y", Float64, latch=True, queue_size=1)
     
-    # create piksi subscribers
-    rospy.Subscriber('gps/rtkfix', Odometry, piksi_cb, queue_size=3)
-    
+
     # create plant state publishers
     pose_x_pub = rospy.Publisher("autoland_pose_x", Float64, queue_size=3)
     pose_y_pub = rospy.Publisher("autoland_pose_y", Float64, queue_size=3)
 
     while not landed:
-        # TODO apply moving avg filter
-        # TODO launch file
-        # TODO simple tests
-        pos_x = piksi_local_x
-        pos_y = piksi_local_y
-        pos_z = cur_local_pose.pose.position.z # TODO get from barometer/laser
+        pos_x = cur_local_pose.pose.position.x
+        pos_y = cur_local_pose.pose.position.y
+        pos_z = cur_local_pose.pose.position.z
 
         # publish x and y position
         pose_x_pub.publish(pos_x)
@@ -179,7 +196,7 @@ def autoland():
         dist_to_land = math.sqrt(
                  math.pow(LAND_X - pos_x, 2) + math.pow(LAND_Y - pos_y,2)
                 )
-        if dist_to_land > allowed_deviation || piksi_cov == 1000:
+        if dist_to_land > allowed_deviation:
             speed_z = 0
         else:
             speed_z = - DESCEND_SPEED
@@ -190,22 +207,29 @@ def autoland():
         velocity_cmd_pub.publish(vel)
         rate.sleep()
 
-        # TODO make sure roll, pitch are within acceptable bounds
-        if pos_z <= DISARM_ALT:
-            rospy.loginfo("Quadcopter landed!")
-            rospy.loginfo("x pos: %.3fm" % pos_x)
-            rospy.loginfo("y pos: %.3fm" % pos_y)
-            rospy.loginfo("Total distance: %.3fm" % dist_to_land)
+        if pos_z <= 0.4:
+            print("I landed!")
+            print("x pos: %.3fm" % pos_x)
+            print("y pos: %.3fm" % pos_y)
+            print("Total distance: %.3fm" % dist_to_land)
             landed = True
             arm(False)
-            rospy.loginfo("FINISHED LAND")
-            landed = True
-    
+
+# disarm and shutdown copter
+def finish_land():
+    global landed
+    rospy.loginfo("FINISHED LAND")
+    landed = True
+    # show results
+
 def advance_state():
     global landState, prevState
-    if landState is 'SET_ALT':
+    if landState is 'MOVE_AWAY':
+        landState = 'SET_ALT'
+            
+    elif landState is 'SET_ALT':
         landState = 'MOVE_LAND' 
-        
+            
     elif landState is 'MOVE_LAND':
         landState = 'AUTOLAND' 
             
@@ -219,8 +243,11 @@ def advance_state():
         rospy.loginfo('landing state changed to: %s' % landState)
     prevState = landState            
 
+
+
 def handle_state():
     switcher = {
+            'MOVE_AWAY': move_away,
             'SET_ALT': set_land_alt,
             'MOVE_LAND': move_to_land,
             'AUTOLAND': autoland,
@@ -230,6 +257,8 @@ def handle_state():
             
 def landing_automator():
     rospy.init_node('autoland_node', anonymous=True)
+    rate = rospy.Rate(20.0) # MUST be more then 2Hz
+    # wait for FCU connection
     rospy.loginfo("setting up topics")
     set_topics()
     rospy.loginfo("topics set up")
@@ -237,15 +266,15 @@ def landing_automator():
     wait_fcu_connection()
     rospy.loginfo("connected to fcu")
     command.setup_services()
+    setup_copter()
 
-    set_offboard(True)    
-    # make sure in offboard mode, could retry but better to exit and retry manually
-    rospy.sleep(1)
-    if current_mode != "OFFBOARD":
-        rospy.logerr("Not in offboard mode, aborting.")
-        sys.exit("unable to enter offboard mode, exiting")
+    # wait until in offboard mode to continue
+    while current_mode != "OFFBOARD":
+        rospy.loginfo("Not in offboard mode yet, waiting")
+        rospy.sleep(1)
 
-    while not landed:
+    move_away() # move copter to random position
+    while not rospy.is_shutdown() != landed:
         if get_distance(target) <= ACC_RAD:
             advance_state()
             handle_state()
@@ -255,7 +284,6 @@ def landing_automator():
 
 if __name__ == '__main__':
     try:
-        while not rospy.is_shutdown():
-            landing_automator()
+        landing_automator()
     except rospy.ROSInterruptException:
         pass
