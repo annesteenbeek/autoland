@@ -103,7 +103,6 @@ def get_distance(target):
 def set_land_alt():
     global target
     pose = PoseStamped()
-    # get prev target xy (should grab current pose x/y)
     pose.pose.position.x = cur_local_pose.pose.position.x
     pose.pose.position.y = cur_local_pose.pose.position.y
     pose.pose.position.z = LAND_ALT # land altitude relative to launch altitude
