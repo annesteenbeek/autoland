@@ -83,7 +83,7 @@ def arm(state):
 
 def set_offboard(state):
     try:
-        ret_mode = command.guided_enable(value=state)
+        command.guided_enable(value=state)
     except rospy.ServiceException as ex:
         fault(ex)
 
@@ -244,7 +244,7 @@ def landing_automator():
         rospy.logerr("Not in offboard mode, aborting.")
         sys.exit("unable to enter offboard mode, exiting")
 
-    while not landed:
+    while not landed and not rospy.is_shutdown():
         if get_distance(target) <= ACC_RAD:
             advance_state()
             handle_state()
@@ -254,7 +254,6 @@ def landing_automator():
 
 if __name__ == '__main__':
     try:
-        while not rospy.is_shutdown():
-            landing_automator()
+        landing_automator()
     except rospy.ROSInterruptException:
         pass
