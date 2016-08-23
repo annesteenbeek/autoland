@@ -12,7 +12,7 @@ from geometry_msgs.msg import PoseStamped, Point, Pose
 from mavros.msg import State, Waypoint 
 from mavros.srv import CommandBool, SetMode, WaypointPush
 from std_msgs.msg import Float64
-from geometry_msgs.msg import Odometry 
+from nav_msgs.msg import Odometry 
 
 # set variables
 target = PoseStamped() # setpoint target to meet
@@ -30,12 +30,11 @@ prevState = landState
 landed = False
 effort_x = 0
 effort_y = 0
-
+rate = 0
 cur_local_pose = PoseStamped()
 current_mode = ""
 prev_mode = ""
 external_postion = Point()
-rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
 
 def pose_cb(pose):
     global cur_local_pose
@@ -178,7 +177,7 @@ def autoland():
         dist_to_land = math.sqrt(
                  math.pow(LAND_X - pos_x, 2) + math.pow(LAND_Y - pos_y,2)
                 )
-        if dist_to_land > allowed_deviation || piksi_cov == 1000:
+        if dist_to_land > allowed_deviation or piksi_cov == 1000:
             speed_z = 0
         else:
             speed_z = - DESCEND_SPEED
@@ -229,6 +228,7 @@ def handle_state():
             
 def landing_automator():
     rospy.init_node('autoland_node', anonymous=True)
+    rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
     rospy.loginfo("setting up topics")
     set_topics()
     rospy.loginfo("topics set up")
