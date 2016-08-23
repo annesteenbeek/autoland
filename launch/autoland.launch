@@ -1,5 +1,6 @@
 <launch>
-	<node name="autoland_main" pkg="autoland_node" type="autoland.py" output="screen" />
+	    <!-- vim: set ft=xml noet : -->
+		<node name="autoland_main" pkg="autoland_node" type="autoland.py" output="screen" />
 
     <node name="controller_x" pkg="pid" type="controller" output="screen">
         <param name="Kp" value="0.20" />
@@ -38,7 +39,9 @@
 
 	<node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
 
-	<node name="piksi" pkg="swiftnav_piksi"
+	<node name="piksi" pkg="swiftnav_piksi" type="piksi_node" output="screen">
+		<param name="port" value="/dev/ttyUSB0" />
+	</node>
 
 </launch>
 

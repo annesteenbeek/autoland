@@ -20,11 +20,11 @@ DESCEND_SPEED = 0.4 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 ACC_RAD = 20.0 # acceptence radius for setpoint [cm]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
-LAND_ALT = 12 # altitude for landing [m]
+LAND_ALT = 10 # altitude for landing [m]
 LAND_X = 0 # relative to piksi 0
 LAND_Y = 0
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
-DISARM_ALT = 0.2 # altitude to turn off engines [m]
+DISARM_ALT = 0.1 # altitude to turn off engines [m]
 landState = 'SET_ALT' # counter for landing progress
 prevState = landState
 landed = False
@@ -139,7 +139,6 @@ def autoland():
     rospy.loginfo("REACHED AUTOLAND")
     stabalize_above_land()
     rospy.loginfo("AUTOLAND loitering done, starting descent")
-    # TODO currently using local pos, should use external estimator
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
     rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
     rospy.Subscriber('effort_y', Float64, pid_cb, "y", 1) 
