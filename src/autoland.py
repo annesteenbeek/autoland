@@ -77,7 +77,7 @@ def set_topics():
 
 def arm(state):
     try:
-        ret_arm = command.arming(state)
+        command.arming(state)
     except rospy.ServiceException as ex:
         fault(ex)
 

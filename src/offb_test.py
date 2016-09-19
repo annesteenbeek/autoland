@@ -5,10 +5,10 @@ import mavros
 from mavros.utils import *
 from mavros import command, mission, setpoint
 from geometry_msgs.msg import PoseStamped, Point, Pose
-
 from mavros.msg import State
 from mavros.srv import CommandBool, SetMode
 
+prev_mode = ""
 
 def pose_cb(pose):
     global cur_local_pose
@@ -29,7 +29,7 @@ def set_topics():
 
 
 def run_test():
-    rospy.init_node('fligt_test')
+    rospy.init_node('flight_test')
     rate = rospy.Rate(100) # rate in HZ
     rospy.loginfo('setting up topics')
     set_topics()
@@ -39,16 +39,32 @@ def run_test():
     rospy.loginfo('connected to fcu')
     command.setup_services()
 
-    command.guided_enable(True)  
-
-    rospy.sleep(1) # sleep 1 second
-
+    # command.guided_enable(True)
     target  = PoseStamped()
 
     target.pose.position.x = 0
     target.pose.position.y = 0
-    target.pose.position.z = 3
-    rospy.loginfo('sending pose, ready to be armed')
+    target.pose.position.z = 3  
+
+    # send a few setpoints before starting
+    for i in range(100):
+        local_pos_pub.publish(target)
+        rate.sleep()
+
+    # print current position
+    rospy.loginfo("cur x position: %.2f", cur_local_pose.pose.position.x)  
+    rospy.loginfo("cur y position: %.2f", cur_local_pose.pose.position.y)
+    rospy.loginfo("cur z position: %.2f", cur_local_pose.pose.position.z)
+    
+    rospy.loginfo('waiting for offboard mode')
+
+    while current_mode != "OFFBOARD" and not rospy.is_shutdown():
+        local_pos_pub.publish(target)
+        rate.sleep()
+
+    rospy.loginfo('in offboard mode')
+
+    rospy.loginfo('sending pose')
     while not rospy.is_shutdown():
         target.header.stamp = rospy.get_rostime()
         local_pos_pub.publish(target)

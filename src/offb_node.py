@@ -28,15 +28,15 @@ def position_control():
     prev_state = current_state
     rate = rospy.Rate(20.0) # MUST be more then 2Hz
 
+    # wait for FCU connection
+    while not current_state.connected:
+        rate.sleep()
+        
     # send a few setpoints before starting
     for i in range(100):
         local_pos_pub.publish(pose)
         rate.sleep()
     
-    # wait for FCU connection
-    while not current_state.connected:
-        rate.sleep()
-
     last_request = rospy.get_rostime()
     while not rospy.is_shutdown():
         now = rospy.get_rostime()
