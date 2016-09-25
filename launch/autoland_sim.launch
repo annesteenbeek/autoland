@@ -1,44 +1,11 @@
 <launch>
     <!-- vim: set ft=xml noet : -->
     
-	<node name="autoland_main" pkg="autoland_node" type="autoland_sim.py" output="screen" />
+	<node name="setup_sim" pkg="autoland" type="setup_sim.py" output="screen" />
+	<node name="autoland_main" pkg="autoland" type="main.py" output="screen" />
+	
+	<include file="$(find autoland)/launch/pids.launch"/>
 
-    <node name="controller_x" pkg="pid" type="controller" output="screen">
-        <param name="Kp" value="0.70" />
-        <param name="Ki" value="0.0" />
-        <param name="Kd" value="0.0" />
-		<param name="upper_limit" value="10" />
-		<param name="lower_limit" value="-10" />
-		<param name="windup_limit" value="10" />
-		<param name="diagnostic_period" value="0.25" />
-		<param name="max_loop_frequency" value="100.0" />
-		<param name="min_loop_frequency" value="100.0" />
-        <param name="topic_from_controller" value="effort_x" />
-        <param name="topic_from_plant" value="autoland_pose_x" />
-        <param name="setpoint_topic" value="autoland_setpoint_x" />
-    </node>
-
-    <node name="controller_y" pkg="pid" type="controller" output="screen">
-        <param name="Kp" value="1.0" />
-        <param name="Ki" value="0.0" />
-        <param name="Kd" value="0.0" />
-		<param name="upper_limit" value="10" />
-		<param name="lower_limit" value="-10" />
-		<param name="windup_limit" value="10" />
-		<param name="diagnostic_period" value="0.25" />
-		<param name="max_loop_frequency" value="100.0" />
-		<param name="min_loop_frequency" value="100.0" />
-        <param name="topic_from_controller" value="effort_y" />
-        <param name="topic_from_plant" value="autoland_pose_y" />
-        <param name="setpoint_topic" value="autoland_setpoint_y" />
-    </node>
-
-	<node name="rqt_plot_x" pkg="rqt_plot" type="rqt_plot" 
-			args="/effort_x/data /autoland_pose_x/data /autoland_setpoint_x/data" />
-	<node name="rqt_plot_y" pkg="rqt_plot" type="rqt_plot" 
-			args="/effort_y/data /autoland_pose_y/data /autoland_setpoint_y/data" />
-
-	<node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
-
+	<include file="$(find px4)/launch/mavros_posix_sitl.launch"/>
 </launch>
 
