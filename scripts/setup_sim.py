@@ -24,8 +24,8 @@ external_postion = Point()
 
 TARGET_REACHED = False
 
-MOVE_X = 5
-MOVE_Y = 4
+MOVE_X = -10 
+MOVE_Y = -10 
 MOVE_Z = 10
 
 ACC_RAD = 0.5
@@ -55,7 +55,7 @@ def set_offboard(state):
 
 def set_topics():
     global local_pos_pub, velocity_cmd_pub, local_pos_sub, state_sub
-    local_pos_pub = setpoint.get_pub_position_local(queue_size=10)
+    local_pos_pub = setpoint.get_pub_position_local(queue_size=10, latch=True)
     local_pos_sub = rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
     state_sub = rospy.Subscriber(mavros.get_topic('state'), State, state_cb)
 
@@ -79,11 +79,12 @@ def setup_copter():
     rospy.loginfo("waiting for fcu connection")
     wait_fcu_connection()
     rospy.loginfo("connected to fcu, setitng up topics")
-    pose = PoseStamped()
+    target = PoseStamped()
     set_topics()
-    pose.pose.position.x = MOVE_X
-    pose.pose.position.y = MOVE_Y
-    pose.pose.position.z = MOVE_Z
+    target.header.frame_id = 'fcu'
+    target.pose.position.x = MOVE_X
+    target.pose.position.y = MOVE_Y
+    target.pose.position.z = MOVE_Z
 
     rate = rospy.Rate(COMM_RATE) # MUST be more then 2Hz
     rospy.loginfo("waiting for autoland service")
@@ -92,27 +93,27 @@ def setup_copter():
     start_auto_land = rospy.ServiceProxy('start_autoland', StartAutoland)
     rospy.loginfo("start sending setpoint")
 
+    arm(True)
     rospy.loginfo("setting mode to offboard") 
     while not current_mode == "OFFBOARD":
         for i in range(100):
-            pose.header.stamp = rospy.get_rostime()
-            local_pos_pub.publish(pose)
+            target.header.stamp = rospy.get_rostime()
+            local_pos_pub.publish(target)
             rate.sleep()
         set_offboard(True)    
 
     # Arm the copter
     rospy.loginfo("arming")
-    arm(True)
     TARGET_REACHED = False
     while not TARGET_REACHED:
-        pose.header.stamp = rospy.get_rostime()
-        local_pos_pub.publish(pose)
+        target.header.stamp = rospy.get_rostime()
+        local_pos_pub.publish(target)
         
-        if get_distance(pose) < ACC_RAD:
-            TARGET_REACHED = True
+        if get_distance(target) < ACC_RAD:
             rospy.loginfo("target reached")
             print(cur_local_pose.pose.position)
             start_auto_land()
+            TARGET_REACHED = True
         rate.sleep()
 
 if __name__ == '__main__':

@@ -17,26 +17,23 @@ from autoland.srv import *
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.8 # descend speed [m/s]
+DESCEND_SPEED = 2 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
-LAND_ALT = 10 # altitude for landing [m]
+LAND_ALT = 20 # altitude for landing [m]
 LAND_X = None # relative to piksi 0
 LAND_Y = None 
-LOITER_TIME = 5. # time to loiter bevore descending [sec]
+LOITER_TIME = 10. # time to loiter bevore descending [sec]
 DISARM_ALT = 0.1 # altitude to turn off engines [m]
 landed = False
 effort_x = 0
 effort_y = 0
 rate = 0
 cur_local_pose = PoseStamped()
-landState = '' # counter for landing progress
 current_mode = ""
 prev_mode = ""
-prevState = ''
-external_postion = Point()
 armed = None
 start_land = False
 
@@ -52,9 +49,25 @@ def state_cb(state):
         rospy.loginfo("changed mode to: %s" % current_mode)
         prev_mode = current_mode
 
+def arm(state):
+    try:
+        ret_arm = command.arming(state)
+    except rospy.ServiceException as ex:
+        fault(ex)
+
 def set_start_land(input):
     global start_land
     rospy.loginfo("Auto land service has been called")
+    if current_mode != "OFFBOARD":
+        rospy.loginfo("Vehicle not in OFFBOARD mode yet,  waiting...")
+        target = PoseStamped()
+        target.header.frame_id = 'fcu'
+        target.pose.position = cur_local_pose.position
+        while not current_mode == "OFFBOARD":
+            target.header.stamp = rospy.get_rostime()
+            local_pos_pub.publish(target)
+            rate.sleep()
+    rospy.loginfo("Vehicle in OFFBOARD mode, continueing...")
     start_land = True
     rospy.loginfo("landing at x %.2f y %.2f" % (LAND_X, LAND_Y))
     return "success"
@@ -136,6 +149,7 @@ def stabalize_above_land():
     start = rospy.get_rostime()
     # loiter for x sec to reach stable position
     rospy.loginfo("AUTOLAND loitering for %.1fsec" %LOITER_TIME)
+    target = cur_local_pose
     while not doneLoitering:
         now = rospy.get_rostime()
         target.header.stamp = now
@@ -148,7 +162,7 @@ def stabalize_above_land():
 def do_land():
     global landed
     # stabalize_above_land()
-    rospy.loginfo("AUTOLAND loitering done, starting descent")
+    # rospy.loginfo("AUTOLAND loitering done, starting descent")
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
     rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
     rospy.Subscriber('effort_y', Float64, pid_cb, "y", 1) 
