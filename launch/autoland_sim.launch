@@ -3,7 +3,8 @@
     
 	<node name="setup_sim" pkg="autoland" type="setup_sim.py" output="screen" />
 	<node name="autoland_main" pkg="autoland" type="main.py" output="screen" />
-	
+	<node name="external_pos" pkg="autoland" type="sepen.py" output="screen" />
+
 	<include file="$(find autoland)/launch/pids.launch"/>
 
 	<include file="$(find px4)/launch/mavros_posix_sitl.launch"/>

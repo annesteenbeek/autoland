@@ -94,6 +94,7 @@ def setup_copter():
     rospy.loginfo("start sending setpoint")
 
     arm(True)
+    rospy.sleep(5)
     rospy.loginfo("setting mode to offboard") 
     while not current_mode == "OFFBOARD":
         for i in range(100):

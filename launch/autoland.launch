@@ -4,6 +4,12 @@
 	
 	<node name="autoland_main" pkg="autoland" type="main.py" output="screen" />
 
+	<node name="external_pos" pkg="autoland" type="epen.py" output="screen" />
+
+	<node pkg="swiftnav_piksi" type="piksi_node" name="piksi_node" output="screen">
+		<param name="port" value="/dev/ttyUSB0" />
+	</node>
+
 	<include file="$(find autoland)/launch/pids.launch">
 		<arg name="plot" value="$(arg plotpid)"/>
 	</include>
