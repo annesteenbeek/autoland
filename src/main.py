@@ -9,30 +9,30 @@ from mavros.utils import *
 from mavros import command, mission, setpoint
 from geometry_msgs.msg import PoseStamped, Point, Pose
 # requires https://github.com/AndreaIncertiDelmonte/mavros repo with compile fixes branch for RPi
-from mavros.msg import State, Waypoint 
-from mavros.srv import CommandBool, SetMode, WaypointPush
+from mavros_msgs.msg import State, Waypoint 
+from mavros_msgs.srv import CommandBool, SetMode, WaypointPush
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry 
 from autoland.srv import *
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 2 # descend speed [m/s]
+DESCEND_SPEED = 0.1 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
-LAND_ALT = 20 # altitude for landing [m]
+LAND_ALT = 10 # altitude for landing [m]
 LAND_X = None # relative to piksi 0
 LAND_Y = None 
 LAND_Z = None
-LOITER_TIME = 10. # time to loiter bevore descending [sec]
+LOITER_TIME = 5. # time to loiter bevore descending [sec]
 DISARM_ALT = 0.1 # altitude to turn off engines [m]
 landed = False
 effort_x = 0
 effort_y = 0
 rate = 0
-cur_local_pose = PoseStamped()
+cur_local_pose = None
 external_pose = None
 current_mode = ""
 prev_mode = ""
@@ -54,6 +54,7 @@ def state_cb(state):
 def external_cb(pose):
     global external_pose
     external_pose = pose
+    print(external_pose.pose.position.x)
     
 def arm(state):
     try:
@@ -71,7 +72,7 @@ def set_start_land(input):
             rospy.loginfo("Vehicle not in OFFBOARD mode yet,  waiting...")
             target = PoseStamped()
             target.header.frame_id = 'fcu'
-            target.pose.position = cur_local_pose.position
+            target.pose.position = cur_local_pose.pose.position
             while not current_mode == "OFFBOARD":
                 target.header.stamp = rospy.get_rostime()
                 local_pos_pub.publish(target)
@@ -91,12 +92,12 @@ def pid_cb(effort, direction):
         rospy.logerr("Incorrect pid cb direction")
 
 def set_topics():
-    global local_pos_pub, velocity_cmd_pub, state_sub
-    # mavros.set_namespace()
+    global local_pos_pub, velocity_cmd_pub, state_sub, pos_sub, external_pos_sub
+    mavros.set_namespace()
     local_pos_pub = setpoint.get_pub_position_local(queue_size=10, latch=True)
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10, latch=True)
-    rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
-    rospy.Subscriber("external_pose_estimation", PoseStamped, external_cb)
+    pos_sub = rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_cb)
+    external_pos_sub = rospy.Subscriber("external_pose_estimation", PoseStamped, external_cb)
     state_sub = rospy.Subscriber(mavros.get_topic('state'), State, state_cb)
     rospy.Service('start_autoland', StartAutoland, set_start_land)
 
@@ -236,7 +237,7 @@ def landing_automator():
     rospy.loginfo("waiting for fcu connection")
     wait_fcu_connection()
     rospy.loginfo("connected to fcu")
-    command.setup_services()
+    # command.setup_services()
     
     if not armed:
        # wait unit vehicle is armed and store that location
@@ -264,6 +265,7 @@ def landing_automator():
     rospy.loginfo("starting automated landing")
     set_land_alt()
     move_to_land()
+    stabalize_above_land()
     do_land()
     rospy.loginfo("finished automated landing")
 

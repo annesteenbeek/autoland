@@ -6,7 +6,7 @@ project(autoland)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
-  mavros
+  #  mavros
   #  mavros_extras
   roscpp
   pid

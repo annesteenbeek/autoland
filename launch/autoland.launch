@@ -1,13 +1,15 @@
 <launch>
     <!-- vim: set ft=xml noet : -->
 	<arg name="plotpid" default="false"/>
-	
+
+	<include file="$(find mavros)/launch/px4.launch"/>
+
 	<node name="autoland_main" pkg="autoland" type="main.py" output="screen" />
 
 	<node name="external_pos" pkg="autoland" type="epen.py" output="screen" />
 
 	<node pkg="swiftnav_piksi" type="piksi_node" name="piksi_node" output="screen">
-		<param name="port" value="/dev/ttyUSB0" />
+		<param name="port" value="/dev/ttyUSB1" />
 	</node>
 
 	<include file="$(find autoland)/launch/pids.launch">

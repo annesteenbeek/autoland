@@ -34,6 +34,7 @@ def piksi_cb(data):
 
 def setup_topics():
     global pub
+    mavros.set_namespace()
     rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
     rospy.Subscriber('gps/rtkfix', Odometry, piksi_cb, queue_size=3)
     pub = rospy.Publisher('external_pose_estimation', PoseStamped, queue_size=10)
@@ -45,7 +46,7 @@ def external_pose_estimator():
     setup_topics()
     external_pose = PoseStamped()
     external_pose.header.frame_id = 'fcu'
-    while not px4_active and not piksi_active and not rospy.is_shutdown():
+    while not px4_active and not piksi_active: 
         rate.sleep()
 
     rospy.loginfo("start sending external position information")
