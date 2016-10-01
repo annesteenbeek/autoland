@@ -54,7 +54,6 @@ def state_cb(state):
 def external_cb(pose):
     global external_pose
     external_pose = pose
-    print(external_pose.pose.position.x)
     
 def arm(state):
     try:
@@ -115,10 +114,15 @@ def get_distance(target):
 def set_land_pos():
     # TODO set land yaw
     global LAND_X, LAND_Y, LAND_Z#, LAND_YAW
-    LAND_X = external_pose.pose.position.x
-    LAND_Y = external_pose.pose.position.y
-    LAND_Z = external_pose.pose.position.z
-    rospy.loginfo("landing pos has been set")
+    if external_pose is None:
+        rospy.logerr("No external positions available")
+        sys.exit("unable to set landing pos, exiting...")
+    else:
+        LAND_X = external_pose.pose.position.x
+        LAND_Y = external_pose.pose.position.y
+        LAND_Z = external_pose.pose.position.z
+        rospy.loginfo("landing pos has been set")
+
 
 # set correct altitude for landing
 def set_land_alt():
