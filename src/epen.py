@@ -33,9 +33,9 @@ def piksi_cb(data):
     piksi_active = True
 
 def setup_topics():
-    global pub
+    global pub, pos_sub
     mavros.set_namespace()
-    rospy.Subscriber(mavros.get_topic('local_position', 'local'), PoseStamped, pose_cb)
+    pos_sub = rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_cb)
     rospy.Subscriber('gps/rtkfix', Odometry, piksi_cb, queue_size=3)
     pub = rospy.Publisher('external_pose_estimation', PoseStamped, queue_size=10)
 
