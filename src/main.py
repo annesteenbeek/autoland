@@ -17,12 +17,12 @@ from autoland.srv import *
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.1 # descend speed [m/s]
+DESCEND_SPEED = 0.2 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
-LAND_ALT = 10 # altitude for landing [m]
+LAND_ALT = 3 # altitude for landing [m]
 LAND_X = None # relative to piksi 0
 LAND_Y = None 
 LAND_Z = None
@@ -47,7 +47,7 @@ def state_cb(state):
     global current_mode, prev_mode, armed
     current_mode = state.mode
     armed = state.armed
-    if current_mode == prev_mode:
+    if current_mode != prev_mode:
         rospy.loginfo("changed mode to: %s" % current_mode)
         prev_mode = current_mode
 
@@ -120,7 +120,7 @@ def set_land_pos():
     else:
         LAND_X = external_pose.pose.position.x
         LAND_Y = external_pose.pose.position.y
-        LAND_Z = external_pose.pose.position.z
+        LAND_Z = cur_local_pose.pose.position.z
         rospy.loginfo("landing pos has been set")
 
 
@@ -145,8 +145,8 @@ def set_land_alt():
 def move_to_land():
     rospy.loginfo("Moving above land target")
     target = PoseStamped()
-    target.pose.position.x = LAND_X
-    target.pose.position.y = LAND_Y
+    target.pose.position.x = 0
+    target.pose.position.y = 0
     target.pose.position.z = cur_local_pose.pose.position.z # dont change alt
 
     while not get_distance(target) <= ACC_RAD: 
@@ -189,7 +189,7 @@ def do_land():
     while not landed:
         pos_x = external_pose.pose.position.x
         pos_y = external_pose.pose.position.y
-        pos_z = external_pose.pose.position.z 
+        pos_z = cur_local_pose.pose.position.z
 
         # publish x and y position
         pose_x_pub.publish(pos_x)
