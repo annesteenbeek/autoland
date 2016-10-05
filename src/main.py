@@ -23,9 +23,11 @@ rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
 LAND_ALT = 3 # altitude for landing [m]
-LAND_X = None # relative to piksi 0
-LAND_Y = None 
-LAND_Z = None
+rtk_start_x = None # relative to piksi 0
+rtk_start_y = None 
+local_start_z = None
+local_start_x = None
+local_start y = None
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
 DISARM_ALT = 0.1 # altitude to turn off engines [m]
 landed = False
@@ -64,7 +66,7 @@ def arm(state):
 def set_start_land(input):
     global start_land
     rospy.loginfo("Auto land service has been called")
-    if LAND_X is None:
+    if rtk_start_x is None:
         rospy.logerr("Unable to land, land pos not set")
     else:
         if current_mode != "OFFBOARD":
@@ -78,7 +80,7 @@ def set_start_land(input):
                 rate.sleep()
         rospy.loginfo("Vehicle in OFFBOARD mode, continueing...")
         start_land = True
-        rospy.loginfo("landing at x %.2f y %.2f" % (LAND_X, LAND_Y))
+        rospy.loginfo("landing at x %.2f y %.2f" % (rtk_start_x, rtk_start_y))
     return "success"
 
 def pid_cb(effort, direction):
@@ -113,14 +115,16 @@ def get_distance(target):
 
 def set_land_pos():
     # TODO set land yaw
-    global LAND_X, LAND_Y, LAND_Z#, LAND_YAW
+    global rtk_start_x, rtk_start_y, local_start_z#, LAND_YAW
     if external_pose is None:
         rospy.logerr("No external positions available")
         sys.exit("unable to set landing pos, exiting...")
     else:
-        LAND_X = external_pose.pose.position.x
-        LAND_Y = external_pose.pose.position.y
-        LAND_Z = cur_local_pose.pose.position.z
+        rtk_start_x = external_pose.pose.position.x
+        rtk_start_y = external_pose.pose.position.y
+        local_start_z = cur_local_pose.pose.position.z
+        local_start_x = cur_local_pose.pose.position.x
+        local_start_y = cur_local_pose.pose.position.y
         rospy.loginfo("landing pos has been set")
 
 
@@ -131,10 +135,11 @@ def set_land_alt():
     target.pose.position.x = cur_local_pose.pose.position.x
     target.pose.position.y = cur_local_pose.pose.position.y
     # don't change height when drone is currently higher then land alt
-    if cur_local_pose.pose.position.z >= LAND_ALT:
-        target.pose.position.z = cur_local_pose.pose.position.z
-    else:
-        target.pose.position.z = LAND_ALT # land altitude relative to launch altitude
+    # if cur_local_pose.pose.position.z >= LAND_ALT:
+    #     target.pose.position.z = cur_local_pose.pose.position.z
+    # else:
+    #     target.pose.position.z = LAND_ALT # land altitude relative to launch altitude
+    target.pose.position.z = LAND_ALT + local_start_z
     while not get_distance(target) <= ACC_RAD: 
         target.header.stamp = rospy.get_rostime()
         local_pos_pub.publish(target)
@@ -145,8 +150,8 @@ def set_land_alt():
 def move_to_land():
     rospy.loginfo("Moving above land target")
     target = PoseStamped()
-    target.pose.position.x = 0
-    target.pose.position.y = 0
+    target.pose.position.x = local_start_x
+    target.pose.position.y = local_start_y
     target.pose.position.z = cur_local_pose.pose.position.z # dont change alt
 
     while not get_distance(target) <= ACC_RAD: 
@@ -196,14 +201,14 @@ def do_land():
         pose_y_pub.publish(pos_y)
 
         # send landing setpoints
-        set_x_pub.publish(LAND_X)
-        set_y_pub.publish(LAND_Y)
+        set_x_pub.publish(rtk_start_x)
+        set_y_pub.publish(rtk_start_y)
 
         speed_x = effort_x
         speed_y = effort_y
 
         dist_to_land = math.sqrt(
-                 math.pow(LAND_X - pos_x, 2) + math.pow(LAND_Y - pos_y,2)
+                 math.pow(rtk_start_x - pos_x, 2) + math.pow(rtk_start_y - pos_y,2)
                 )
         if dist_to_land > allowed_deviation:# or piksi_cov == 1000:
             speed_z = 0
@@ -217,10 +222,10 @@ def do_land():
         rate.sleep()
 
         # TODO make sure roll, pitch are within acceptable bounds
-        if (pos_z - LAND_Z) <= DISARM_ALT:
+        if (pos_z - local_start_z) <= DISARM_ALT:
             rospy.loginfo("Quadcopter landed!")
-            rospy.loginfo("x pos: %.3fm" % pos_x)
-            rospy.loginfo("y pos: %.3fm" % pos_y)
+            rospy.loginfo("x pos: %.3fm" % pos_x - rtk_start_x)
+            rospy.loginfo("y pos: %.3fm" % pos_y - rtk_start_y)
             rospy.loginfo("Total distance: %.3fm" % dist_to_land)
             # TODO fix end of landing
             arm(False)
