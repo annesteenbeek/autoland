@@ -21,13 +21,14 @@ DESCEND_SPEED = 0.2 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
+MAX_APPROACH_SPEED = 0.1
 allowed_deviation = 0.1 # radius to exceed to stop descend [m]
 LAND_ALT = 3 # altitude for landing [m]
 rtk_start_x = None # relative to piksi 0
 rtk_start_y = None 
 local_start_z = None
 local_start_x = None
-local_start y = None
+local_start_y = None
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
 DISARM_ALT = 0.1 # altitude to turn off engines [m]
 landed = False
@@ -93,7 +94,7 @@ def pid_cb(effort, direction):
         rospy.logerr("Incorrect pid cb direction")
 
 def set_topics():
-    global local_pos_pub, velocity_cmd_pub, state_sub, pos_sub, external_pos_sub
+    global local_pos_pub, velocity_cmd_pub, state_sub, pos_sub, external_pos_sub, set_mode_pub
     mavros.set_namespace()
     local_pos_pub = setpoint.get_pub_position_local(queue_size=10, latch=True)
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10, latch=True)
@@ -101,6 +102,7 @@ def set_topics():
     external_pos_sub = rospy.Subscriber("external_pose_estimation", PoseStamped, external_cb)
     state_sub = rospy.Subscriber(mavros.get_topic('state'), State, state_cb)
     rospy.Service('start_autoland', StartAutoland, set_start_land)
+    set_mode_pub = rospy.ServiceProxy("mavros/set_mode", SetMode)
 
 # calculate distance between two points in 3d
 def get_distance(target):
@@ -115,7 +117,7 @@ def get_distance(target):
 
 def set_land_pos():
     # TODO set land yaw
-    global rtk_start_x, rtk_start_y, local_start_z#, LAND_YAW
+    global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z#, LAND_YAW
     if external_pose is None:
         rospy.logerr("No external positions available")
         sys.exit("unable to set landing pos, exiting...")
@@ -134,12 +136,8 @@ def set_land_alt():
     target = PoseStamped()
     target.pose.position.x = cur_local_pose.pose.position.x
     target.pose.position.y = cur_local_pose.pose.position.y
-    # don't change height when drone is currently higher then land alt
-    # if cur_local_pose.pose.position.z >= LAND_ALT:
-    #     target.pose.position.z = cur_local_pose.pose.position.z
-    # else:
-    #     target.pose.position.z = LAND_ALT # land altitude relative to launch altitude
     target.pose.position.z = LAND_ALT + local_start_z
+
     while not get_distance(target) <= ACC_RAD: 
         target.header.stamp = rospy.get_rostime()
         local_pos_pub.publish(target)
@@ -165,7 +163,9 @@ def stabalize_above_land():
     start = rospy.get_rostime()
     # loiter for x sec to reach stable position
     rospy.loginfo("AUTOLAND loitering for %.1fsec" %LOITER_TIME)
-    target = cur_local_pose
+    target.pose.position.x = local_start_x
+    target.pose.position.y = local_start_y
+    target.pose.position.z = local_start_z + LAND_ALT
     while not doneLoitering:
         now = rospy.get_rostime()
         target.header.stamp = now
@@ -210,6 +210,7 @@ def do_land():
         dist_to_land = math.sqrt(
                  math.pow(rtk_start_x - pos_x, 2) + math.pow(rtk_start_y - pos_y,2)
                 )
+
         if dist_to_land > allowed_deviation:# or piksi_cov == 1000:
             speed_z = 0
         else:
@@ -222,13 +223,16 @@ def do_land():
         rate.sleep()
 
         # TODO make sure roll, pitch are within acceptable bounds
-        if (pos_z - local_start_z) <= DISARM_ALT:
+        # TODO make sure it is within velocity bounds
+
+        set_speed_total = math.sqrt(speed_x**2 + speed_y**2)
+
+        if (pos_z - local_start_z) <= DISARM_ALT && set_speed_total <= MAX_APPROACH_SPEED:
             rospy.loginfo("Quadcopter landed!")
-            rospy.loginfo("x pos: %.3fm" % pos_x - rtk_start_x)
-            rospy.loginfo("y pos: %.3fm" % pos_y - rtk_start_y)
+            rospy.loginfo("x pos: %.3fm" % (pos_x - rtk_start_x))
+            rospy.loginfo("y pos: %.3fm" % (pos_y - rtk_start_y))
             rospy.loginfo("Total distance: %.3fm" % dist_to_land)
-            # TODO fix end of landing
-            arm(False)
+            set_mode_pub(custom_mode="AUTO.LAND")
             rospy.loginfo("FINISHED LAND")
             landed = True
     
