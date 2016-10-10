@@ -30,7 +30,7 @@ local_start_z = None
 local_start_x = None
 local_start_y = None
 LOITER_TIME = 5. # time to loiter bevore descending [sec]
-DISARM_ALT = 0.1 # altitude to turn off engines [m]
+DISARM_ALT = 0.4 # altitude to turn off engines [m]
 landed = False
 effort_x = 0
 effort_y = 0
@@ -41,6 +41,11 @@ current_mode = ""
 prev_mode = ""
 armed = None
 start_land = False
+
+# for z p filter
+min_speed_z = -1
+max_speed_z = 1
+z_p = 0.2
 
 def pose_cb(pose):
     global cur_local_pose
@@ -117,7 +122,7 @@ def get_distance(target):
 
 def set_land_pos():
     # TODO set land yaw
-    global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z#, LAND_YAW
+    global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z, local_start_yaw 
     if external_pose is None:
         rospy.logerr("No external positions available")
         sys.exit("unable to set landing pos, exiting...")
@@ -127,6 +132,7 @@ def set_land_pos():
         local_start_z = cur_local_pose.pose.position.z
         local_start_x = cur_local_pose.pose.position.x
         local_start_y = cur_local_pose.pose.position.y
+        local_start_yaw = cur_local_pose.pose.orientation
         rospy.loginfo("landing pos has been set")
 
 
@@ -177,12 +183,11 @@ def stabalize_above_land():
 # engage in controlled descent
 def do_land():
     global landed
-    # stabalize_above_land()
-    # rospy.loginfo("AUTOLAND loitering done, starting descent")
+    rospy.loginfo("AUTOLAND loitering done, starting descent")
     velocity_cmd_pub = setpoint.get_pub_velocity_cmd_vel(queue_size=10)
     rospy.Subscriber('effort_x', Float64, pid_cb, "x", 1)
     rospy.Subscriber('effort_y', Float64, pid_cb, "y", 1) 
-    
+
     # create setpoint publishers
     set_x_pub = rospy.Publisher("autoland_setpoint_x", Float64, latch=True, queue_size=1)
     set_y_pub = rospy.Publisher("autoland_setpoint_y", Float64, latch=True, queue_size=1)
@@ -191,10 +196,27 @@ def do_land():
     pose_x_pub = rospy.Publisher("autoland_pose_x", Float64, queue_size=3)
     pose_y_pub = rospy.Publisher("autoland_pose_y", Float64, queue_size=3)
 
+    hold_height = None # altitude to hold when not above target
+
     while not landed:
+
         pos_x = external_pose.pose.position.x
         pos_y = external_pose.pose.position.y
-        pos_z = cur_local_pose.pose.position.z
+
+        dist_to_land = math.sqrt(
+                 math.pow(rtk_start_x - pos_x, 2) + math.pow(rtk_start_y - pos_y,2)
+                )
+
+        if dist_to_land > allowed_deviation:
+            above_target = False
+            if hold_height is None:
+                hold_height = pos_z
+                rospy.loginfo("not above target, holding alt")
+        else:
+            above_target = True
+            if hold_height is not None:
+                hold_height = None # reset hold height
+                rospy.loginfo("above target, descending")
 
         # publish x and y position
         pose_x_pub.publish(pos_x)
@@ -206,32 +228,33 @@ def do_land():
 
         speed_x = effort_x
         speed_y = effort_y
-
-        dist_to_land = math.sqrt(
-                 math.pow(rtk_start_x - pos_x, 2) + math.pow(rtk_start_y - pos_y,2)
-                )
-
-        if dist_to_land > allowed_deviation:# or piksi_cov == 1000:
-            speed_z = 0
-        else:
-            speed_z = - DESCEND_SPEED
         
+        if above_target:
+            speed_z = - DESCEND_SPEED
+        else:
+            speed_z = z_p * (hold_height - pos_z)
+            # enforce min/max
+            if speed_z > max_speed_z:
+                speed_z = max_speed_z
+            elif speed_z < min_speed_z:
+                speed_z = min_speed_z
+
+
+                
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
         vel.twist.linear = setpoint.Vector3(x=speed_x, y=speed_y, z=speed_z)
         vel.twist.angular = setpoint.Vector3(z=0)
         velocity_cmd_pub.publish(vel)
         rate.sleep()
 
-        # TODO make sure roll, pitch are within acceptable bounds
-        # TODO make sure it is within velocity bounds
-
         set_speed_total = math.sqrt(speed_x**2 + speed_y**2)
 
-        if (pos_z - local_start_z) <= DISARM_ALT && set_speed_total <= MAX_APPROACH_SPEED:
+        if (pos_z - local_start_z) <= DISARM_ALT: #and set_speed_total <= MAX_APPROACH_SPEED:
             rospy.loginfo("Quadcopter landed!")
             rospy.loginfo("x pos: %.3fm" % (pos_x - rtk_start_x))
             rospy.loginfo("y pos: %.3fm" % (pos_y - rtk_start_y))
             rospy.loginfo("Total distance: %.3fm" % dist_to_land)
+            rospy.loginfo("At altitude %.3fm" % (pos_z - local_start_z))
             set_mode_pub(custom_mode="AUTO.LAND")
             rospy.loginfo("FINISHED LAND")
             landed = True
