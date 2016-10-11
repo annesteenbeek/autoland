@@ -122,7 +122,7 @@ def get_distance(target):
 
 def set_land_pos():
     # TODO set land yaw
-    global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z, local_start_yaw 
+    global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z, local_start_orientation
     if external_pose is None:
         rospy.logerr("No external positions available")
         sys.exit("unable to set landing pos, exiting...")
@@ -132,7 +132,7 @@ def set_land_pos():
         local_start_z = cur_local_pose.pose.position.z
         local_start_x = cur_local_pose.pose.position.x
         local_start_y = cur_local_pose.pose.position.y
-        local_start_yaw = cur_local_pose.pose.orientation
+        local_start_orientation = cur_local_pose.pose.orientation
         rospy.loginfo("landing pos has been set")
 
 
@@ -172,6 +172,7 @@ def stabalize_above_land():
     target.pose.position.x = local_start_x
     target.pose.position.y = local_start_y
     target.pose.position.z = local_start_z + LAND_ALT
+    target.pose.orientation = local_start_orientation # set start yaw by copying start orientation (only yaw is used)
     while not doneLoitering:
         now = rospy.get_rostime()
         target.header.stamp = now
@@ -238,8 +239,6 @@ def do_land():
                 speed_z = max_speed_z
             elif speed_z < min_speed_z:
                 speed_z = min_speed_z
-
-
                 
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
         vel.twist.linear = setpoint.Vector3(x=speed_x, y=speed_y, z=speed_z)
@@ -282,10 +281,16 @@ def landing_automator():
        while not got_land: 
             if armed:
                 # wait until external pose has been sent for accurate starting pos
-                if external_pose is not None: 
-                    rospy.loginfo("Armed and receiving, setting landing pos")
-                    set_land_pos()
-                    got_land = True
+                rospy.wait_for_service('set_launch_heading')
+                set_launch_heading = rospy.ServiceProxy('set_launch_heading', SetLaunchHeading)
+                # rotate the RTK frame to be aligned with fcu start heading
+                set_launch_heading()
+                # make sure external pose is available
+                while external_pose is None:
+                    rospy.sleep()
+                rospy.loginfo("Armed and receiving, setting landing pos")
+                set_land_pos()
+                got_land = True
             rate.sleep()
     elif armed: 
         rospy.logerr("Script needs to be ran before launch")
@@ -299,7 +304,9 @@ def landing_automator():
        rate.sleep()
 
     rospy.loginfo("starting automated landing")
+    rospy.loginfo("setting landing altitude")
     set_land_alt()
+    rospy.loginfo("moving to landing position")
     move_to_land()
     stabalize_above_land()
     do_land()
