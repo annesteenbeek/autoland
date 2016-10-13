@@ -17,7 +17,7 @@ from autoland.srv import *
 
 # set variables
 target = PoseStamped() # setpoint target to meet
-DESCEND_SPEED = 0.2 # descend speed [m/s]
+DESCEND_SPEED = 0.4 # descend speed [m/s]
 COMM_RATE = 100.0 # ros rate [hz]
 rate = None
 ACC_RAD = 0.2 # acceptence radius for setpoint [m]
@@ -29,7 +29,7 @@ rtk_start_y = None
 local_start_z = None
 local_start_x = None
 local_start_y = None
-LOITER_TIME = 5. # time to loiter bevore descending [sec]
+LOITER_TIME = 3. # time to loiter bevore descending [sec]
 DISARM_ALT = 0.4 # altitude to turn off engines [m]
 landed = False
 effort_x = 0
@@ -45,7 +45,10 @@ start_land = False
 # for z p filter
 min_speed_z = -1
 max_speed_z = 1
+min_speed_xy = -1
+max_speed_xy = 1
 z_p = 0.2
+xy_p = 0.2
 
 def pose_cb(pose):
     global cur_local_pose
@@ -121,7 +124,6 @@ def get_distance(target):
     return dist 
 
 def set_land_pos():
-    # TODO set land yaw
     global rtk_start_x, rtk_start_y, local_start_x, local_start_y, local_start_z, local_start_orientation
     if external_pose is None:
         rospy.logerr("No external positions available")
@@ -203,6 +205,7 @@ def do_land():
 
         pos_x = external_pose.pose.position.x
         pos_y = external_pose.pose.position.y
+        pos_z = external_pose.pose.position.z
 
         dist_to_land = math.sqrt(
                  math.pow(rtk_start_x - pos_x, 2) + math.pow(rtk_start_y - pos_y,2)
@@ -239,7 +242,21 @@ def do_land():
                 speed_z = max_speed_z
             elif speed_z < min_speed_z:
                 speed_z = min_speed_z
-                
+
+        # speed_x = xy_p * (rtk_start_x - pos_x)
+        # # enforce min/max
+        # if speed_x > max_speed_xy:
+        #     speed_x = max_speed_xy
+        # elif speed_x < min_speed_xy:
+        #     speed_x = min_speed_xy
+
+        # speed_y = xy_p * (rtk_start_y - pos_y)
+        # # enforce min/max
+        # if speed_y > max_speed_xy:
+        #     speed_y = max_speed_xy
+        # elif speed_y < min_speed_xy:
+        #     speed_y = min_speed_xy
+      
         vel = setpoint.TwistStamped(header=setpoint.Header(frame_id='mavsetp', stamp=rospy.get_rostime()))
         vel.twist.linear = setpoint.Vector3(x=speed_x, y=speed_y, z=speed_z)
         vel.twist.angular = setpoint.Vector3(z=0)
@@ -280,14 +297,9 @@ def landing_automator():
        rospy.loginfo("not armed, waiting")
        while not got_land: 
             if armed:
-                # wait until external pose has been sent for accurate starting pos
-                rospy.wait_for_service('set_launch_heading')
-                set_launch_heading = rospy.ServiceProxy('set_launch_heading', SetLaunchHeading)
-                # rotate the RTK frame to be aligned with fcu start heading
-                set_launch_heading()
                 # make sure external pose is available
                 while external_pose is None:
-                    rospy.sleep()
+                    rate.sleep()
                 rospy.loginfo("Armed and receiving, setting landing pos")
                 set_land_pos()
                 got_land = True
