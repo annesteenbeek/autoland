@@ -72,25 +72,33 @@ def arm(state):
     except rospy.ServiceException as ex:
         fault(ex)
 
-def set_start_land(input):
-    global start_land
-    rospy.loginfo("Auto land service has been called")
-    if rtk_start_x is None:
-        rospy.logerr("Unable to land, land pos not set")
-    else:
-        if current_mode != "OFFBOARD":
-            rospy.loginfo("Vehicle not in OFFBOARD mode yet,  waiting...")
-            target = PoseStamped()
-            target.header.frame_id = 'fcu'
-            target.pose.position = cur_local_pose.pose.position
-            while not current_mode == "OFFBOARD":
-                target.header.stamp = rospy.get_rostime()
-                local_pos_pub.publish(target)
-                rate.sleep()
-        rospy.loginfo("Vehicle in OFFBOARD mode, continueing...")
-        start_land = True
+def is_guided():
+    result = False
+    if current_mode is "":
+        rospy.logerr("Unable to retrieve mode, not yet available")
+    elif current_mode is "OFFBOARD" or current_mode is "GUIDED":
+        result = True
+    return result
+
+def is_ready():
+    return False if \
+            cur_local_pose is None or \
+            external_pose is None or \
+            armed is None \
+            else True
+            
+# if land pos is set, keep sending current position
+def is_start_autoland():
+    if not is_guided() and rtk_start_x is not None:
+        target = PoseStamped()
+        target.header.frame_id = 'fcu'
+        target.pose= cur_local_pose.pose
+        target.header.stamp = rospy.get_rostime()
+        local_pos_pub.publish(target)
+    elif is_guided() and rtk_start_x is not None: 
         rospy.loginfo("landing at x %.2f y %.2f" % (rtk_start_x, rtk_start_y))
-    return "success"
+        return True
+    return False
 
 def pid_cb(effort, direction):
     global effort_x, effort_y
@@ -266,12 +274,13 @@ def do_land():
         set_speed_total = math.sqrt(speed_x**2 + speed_y**2)
 
         if (pos_z - local_start_z) <= DISARM_ALT: #and set_speed_total <= MAX_APPROACH_SPEED:
+            # TODO go straight down until landing is detected
             rospy.loginfo("Quadcopter landed!")
             rospy.loginfo("x pos: %.3fm" % (pos_x - rtk_start_x))
             rospy.loginfo("y pos: %.3fm" % (pos_y - rtk_start_y))
             rospy.loginfo("Total distance: %.3fm" % dist_to_land)
             rospy.loginfo("At altitude %.3fm" % (pos_z - local_start_z))
-            set_mode_pub(custom_mode="AUTO.LAND")
+            set_mode_pub(custom_mode="LAND")
             rospy.loginfo("FINISHED LAND")
             landed = True
     
@@ -311,8 +320,8 @@ def landing_automator():
         rospy.logerr("unknown armed state")
         sys.exit("Exiting...")
         
-    # auto land is started using a service
-    while not start_land:
+    # wait until offboard button is switched
+    while not is_start_autoland():
        rate.sleep()
 
     rospy.loginfo("starting automated landing")

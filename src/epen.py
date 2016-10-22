@@ -52,6 +52,7 @@ def external_pose_estimator():
         rate.sleep()
 
     while not rospy.is_shutdown():
+        # TODO implement low pass filter to prevent phase shift errors
         piksi_x_mean_list = [piksi_local_x] + piksi_x_mean_list
         piksi_y_mean_list = [piksi_local_y] + piksi_y_mean_list
         
