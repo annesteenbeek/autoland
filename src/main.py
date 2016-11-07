@@ -280,7 +280,7 @@ def do_land():
             rospy.loginfo("y pos: %.3fm" % (pos_y - rtk_start_y))
             rospy.loginfo("Total distance: %.3fm" % dist_to_land)
             rospy.loginfo("At altitude %.3fm" % (pos_z - local_start_z))
-            set_mode_pub(custom_mode="LAND")
+            set_mode_pub(custom_mode="AUTO.LAND")
             rospy.loginfo("FINISHED LAND")
             landed = True
     

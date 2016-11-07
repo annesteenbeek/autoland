@@ -3,7 +3,7 @@
    <arg name="plot" default="false"/>
 
    <node name="controller_x" pkg="pid" type="controller" output="screen">
-        <param name="Kp" value="0.20" />
+        <param name="Kp" value="0.10" />
         <param name="Ki" value="0.0" />
         <param name="Kd" value="0.0" />
 		<param name="upper_limit" value="1" />
@@ -18,7 +18,7 @@
     </node>
 
     <node name="controller_y" pkg="pid" type="controller" output="screen">
-        <param name="Kp" value="0.20" />
+        <param name="Kp" value="0.10" />
         <param name="Ki" value="0.0" />
         <param name="Kd" value="0.0" />
 		<param name="upper_limit" value="1" />
