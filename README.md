@@ -1,19 +1,15 @@
 # Autoland package 
-This package was used for my bachelor thesis.
-Developing a method for multirotors to land with centimeter accuracy in varrying conditions (fog, night etc..). Mainly aimed at agricultural applications.
-
-This package is used in combination with a Swiftnaf piksi RTK GPS to accuratly monitor the position of the vehicle. 
-The mavros stack is used to control the multirotor.
-
-The entire stack is aimed to be ran on a companion computer (A raspberry PI).
+This is a ROS package created during my bachelor thesis (paper included).
+This package is used to provide an extandable sensor method to land with centimeter accuracy in varrying conditions (fog, night etc..).This is achieved by retrieving position information using an RTK GPS and controlling the quadrotor velocity with a PID filter. The software is ran on a companion computer (Raspberry Pi) connected to a pixhawk.
 
 The paper is included in the repository, for any additional questions you can contact me or create an github issue.
 
 ## Dependencies
 ROS indigo
 ### ROS packages
-mavros http://wiki.ros.org/mavros
-swiftnav http://wiki.ros.org/swiftnav
+*mavros [doc](http://wiki.ros.org/mavros)
+*swiftnav [doc](http://wiki.ros.org/swiftnav)
+*PID [doc](http://wiki.ros.org/pid)
 
 
 
