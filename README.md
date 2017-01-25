@@ -4,12 +4,12 @@ This package is used to provide an extandable sensor method to land with centime
 
 The paper is included in the repository, for any additional questions you can contact me or create an github issue.
 
-## Dependencies
+### Dependencies
 ROS indigo
-### ROS packages
-*mavros [doc](http://wiki.ros.org/mavros)
-*swiftnav [doc](http://wiki.ros.org/swiftnav)
-*PID [doc](http://wiki.ros.org/pid)
+#### ROS packages
+* mavros [doc](http://wiki.ros.org/mavros)
+* swiftnav [doc](http://wiki.ros.org/swiftnav)
+* PID [doc](http://wiki.ros.org/pid)
 
 
 
